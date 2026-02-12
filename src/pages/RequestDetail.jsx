@@ -179,7 +179,7 @@ export default function RequestDetail() {
     } catch (error) {
       console.error("Failed to save data:", error);
       setToastSeverity("error");
-      setToastMessage("Failed to save changes.");
+      setToastMessage("You don't have the necessary permissions to save changes.");
       setShowToast(true);
     }
   };
