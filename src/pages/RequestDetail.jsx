@@ -1,6 +1,5 @@
 import {
-  Alert,
-  Box,
+  Alert, Box,
   Button,
   Card,
   CardContent,
@@ -11,8 +10,10 @@ import {
   Stack,
   TextField,
   Typography,
+  Paper,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { useRequests } from "../context/RequestContext";
@@ -30,6 +31,8 @@ export default function RequestDetail() {
   const [toastMessage, setToastMessage] = useState(location.state?.requestCreatedMessage || "");
   const [showToast, setShowToast] = useState(Boolean(location.state?.requestCreatedMessage));
   const [tableData, setTableData] = useState([]);
+  const [responseFile, setResponseFile] = useState(null);
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
 
   // Load request from context or fetch directly from API
   useEffect(() => {
@@ -166,6 +169,51 @@ export default function RequestDetail() {
     }
   };
 
+  const handleResponseFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setResponseFile({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        content: reader.result,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitResponse = async () => {
+    if (!department.trim()) {
+      setToastMessage("Please enter your department name.");
+      setShowToast(true);
+      return;
+    }
+
+    setIsSubmittingResponse(true);
+    try {
+      await addSubmission(request.id, {
+        department,
+        status: "Submitted",
+        responseFile: responseFile,
+        rows: [], // Option to keep table data separate
+      });
+
+      setDepartment("");
+      setResponseFile(null);
+      setToastMessage("Response submitted successfully!");
+      setShowToast(true);
+    } catch (error) {
+      console.error("Failed to submit response:", error);
+      setToastMessage("Failed to submit response.");
+      setShowToast(true);
+    } finally {
+      setIsSubmittingResponse(false);
+    }
+  };
+
   const handleMockSubmit = () => {
     if (!department.trim()) return;
     addSubmission(request.id, {
@@ -254,6 +302,36 @@ export default function RequestDetail() {
                 <Typography color="text.secondary">
                   📝 <strong>Instructions:</strong> {request.instructions}
                 </Typography>
+
+                {request.templateFile && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: '#f0f9ff', borderRadius: 2, border: '1px solid #bae6fd' }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <UploadFileIcon sx={{ color: '#0369a1' }} />
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography variant="subtitle2" fontWeight={700} color="#0c4a6e">
+                          Attached Template
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {request.templateFile.name} ({(request.templateFile.size / 1024).toFixed(1)} KB)
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        href={request.templateFile.content}
+                        download={request.templateFile.name}
+                        sx={{
+                          bgcolor: '#0369a1',
+                          fontSize: '0.75rem',
+                          textTransform: 'none',
+                          '&:hover': { bgcolor: '#075985' }
+                        }}
+                      >
+                        Download
+                      </Button>
+                    </Stack>
+                  </Box>
+                )}
               </Stack>
 
             </CardContent>
@@ -276,6 +354,53 @@ export default function RequestDetail() {
               ) : (
                 <Typography color="text.secondary">Reminders are disabled.</Typography>
               )}
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                📤 Submit Your Response
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  label="Your Department"
+                  size="small"
+                  fullWidth
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                />
+
+                {!responseFile ? (
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<UploadFileIcon />}
+                    sx={{ textTransform: 'none', py: 1 }}
+                  >
+                    Upload Completed File
+                    <input type="file" hidden onChange={handleResponseFileChange} />
+                  </Button>
+                ) : (
+                  <Box sx={{ p: 1, border: '1px solid #e2e8f0', borderRadius: 1, bgcolor: '#f8fafc' }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="caption" sx={{ flexGrow: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {responseFile.name}
+                      </Typography>
+                      <Button size="small" color="error" onClick={() => setResponseFile(null)}>Remove</Button>
+                    </Stack>
+                  </Box>
+                )}
+
+                <Button
+                  variant="contained"
+                  fullWidth
+                  disabled={isSubmittingResponse}
+                  onClick={handleSubmitResponse}
+                  sx={{ bgcolor: '#0f4c81', textTransform: 'none' }}
+                >
+                  {isSubmittingResponse ? "Submitting..." : "Submit Data"}
+                </Button>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
@@ -322,6 +447,46 @@ export default function RequestDetail() {
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: 'italic' }}>
             💡 The grid above is fully interactive - you can edit cells, add/delete rows, and add/delete columns.
           </Typography>
+
+          {/* New Section: File Submissions Log */}
+          {request.submissions && request.submissions.some(s => s.responseFile) && (
+            <Box sx={{ mt: 4 }}>
+              <Typography variant="subtitle1" fontWeight={700} gutterBottom>
+                📁 Departmental File Submissions
+              </Typography>
+              <Grid container spacing={2}>
+                {request.submissions
+                  .filter(s => s.responseFile)
+                  .map((sub, idx) => (
+                    <Grid item xs={12} sm={6} md={4} key={idx}>
+                      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Stack direction="row" spacing={1} alignItems="flex-start">
+                          <UploadFileIcon fontSize="small" color="primary" sx={{ mt: 0.5 }} />
+                          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle2" noWrap sx={{ fontWeight: 600 }}>
+                              {sub.department}
+                            </Typography>
+                            <Typography variant="caption" display="block" color="text.secondary" noWrap>
+                              {sub.responseFile.name}
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="text"
+                              href={sub.responseFile.content}
+                              download={sub.responseFile.name}
+                              sx={{ mt: 1, p: 0, minWidth: 0, textTransform: 'none' }}
+                            >
+                              Download File
+                            </Button>
+                          </Box>
+                        </Stack>
+                      </Paper>
+                    </Grid>
+                  ))}
+              </Grid>
+            </Box>
+          )}
+
           {combinedRows.length > 0 && (
             <Box
               sx={{

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
     Paper,
     Table,
@@ -10,12 +11,19 @@ import {
     IconButton,
     Stack,
     Typography,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogContentText,
+    DialogActions,
+    Button,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
-import FilterListIcon from "@mui/icons-material/FilterList";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useRequests } from "../context/RequestContext";
+import { useAuth } from "../context/AuthContext";
 
 const STATUS_COLORS = {
     Pending: { bg: "#fef3c7", color: "#d97706", label: "Pending" },
@@ -25,13 +33,50 @@ const STATUS_COLORS = {
 };
 
 export default function RequestTable({ requests }) {
+    const { deleteRequest } = useRequests();
+    const { user, isAdmin, isEditor } = useAuth();
+    const navigate = useNavigate();
+
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [idToDelete, setIdToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDeleteClick = (id) => {
+        setIdToDelete(id);
+        setDeleteModalOpen(true);
+    };
+
+    const handleCloseModal = () => {
+        setDeleteModalOpen(false);
+        setIdToDelete(null);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!idToDelete) return;
+
+        setIsDeleting(true);
+        try {
+            await deleteRequest(idToDelete);
+            handleCloseModal();
+        } catch (error) {
+            console.error("Failed to delete request:", error);
+            alert("Failed to delete request. Please check the console for details.");
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const handleEdit = (id) => {
+        // Since editing happens on the detail page, navigate there
+        navigate(`/request/${id}`);
+    };
+
     return (
         <TableContainer component={Paper} elevation={0} sx={{ border: "1px solid #e5e7eb" }}>
             <Table sx={{ minWidth: 650 }} aria-label="request table">
                 <TableHead sx={{ bgcolor: "#f9fafb" }}>
                     <TableRow>
                         <TableCell sx={{ fontWeight: 600, color: "#4b5563" }}>Request Name</TableCell>
-                        <TableCell sx={{ fontWeight: 600, color: "#4b5563" }}>Columns</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: "#4b5563" }}>Entries</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: "#4b5563" }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600, color: "#4b5563" }}>Due Date</TableCell>
@@ -52,13 +97,6 @@ export default function RequestTable({ requests }) {
                                 <TableCell component="th" scope="row">
                                     <Typography variant="body2" fontWeight={500}>
                                         {row.title}
-                                    </Typography>
-                                </TableCell>
-                                <TableCell>
-                                    <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {row.columns && row.columns.length > 0
-                                            ? row.columns.join(", ")
-                                            : "-"}
                                     </Typography>
                                 </TableCell>
                                 <TableCell>
@@ -86,18 +124,17 @@ export default function RequestTable({ requests }) {
                                 </TableCell>
                                 <TableCell>
                                     <Stack direction="row" spacing={1}>
-                                        <IconButton size="small" component={Link} to={`/request/${row.id}`} sx={{ color: "#4b5563" }}>
-                                            <VisibilityIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton size="small" sx={{ color: "#4b5563" }}>
-                                            <EditIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton size="small" sx={{ color: "#4b5563" }}>
-                                            <DeleteIcon fontSize="small" />
-                                        </IconButton>
-                                        <IconButton size="small" sx={{ color: "#4b5563" }}>
-                                            <FilterListIcon fontSize="small" sx={{ transform: 'rotate(90deg)' }} />
-                                        </IconButton>
+                                        {(isAdmin || isEditor) && (
+                                            <IconButton size="small" onClick={() => handleEdit(row.id)} sx={{ color: "#4b5563" }} title="Edit">
+                                                <EditIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
+
+                                        {(isAdmin || (isEditor && row.createdBy === user?.id)) && (
+                                            <IconButton size="small" onClick={() => handleDeleteClick(row.id)} sx={{ color: "#dc2626" }} title="Delete">
+                                                <DeleteIcon fontSize="small" />
+                                            </IconButton>
+                                        )}
                                     </Stack>
                                 </TableCell>
                             </TableRow>
@@ -105,13 +142,43 @@ export default function RequestTable({ requests }) {
                     })}
                     {requests.length === 0 && (
                         <TableRow>
-                            <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                            <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
                                 <Typography color="text.secondary">No requests found</Typography>
                             </TableCell>
                         </TableRow>
                     )}
                 </TableBody>
             </Table>
+
+            <Dialog
+                open={deleteModalOpen}
+                onClose={handleCloseModal}
+                aria-labelledby="delete-dialog-title"
+                aria-describedby="delete-dialog-description"
+            >
+                <DialogTitle id="delete-dialog-title">
+                    {"Confirm Delete"}
+                </DialogTitle>
+                <DialogContent>
+                    <DialogContentText id="delete-dialog-description">
+                        Are you sure you want to delete this data request? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions sx={{ p: 2, pt: 0 }}>
+                    <Button onClick={handleCloseModal} color="inherit">
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={handleConfirmDelete}
+                        color="error"
+                        variant="contained"
+                        disabled={isDeleting}
+                        autoFocus
+                    >
+                        {isDeleting ? "Deleting..." : "Delete Request"}
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </TableContainer>
     );
 }

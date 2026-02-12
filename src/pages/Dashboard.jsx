@@ -12,9 +12,11 @@ import { Link } from "react-router-dom";
 import { useRequests } from "../context/RequestContext";
 import RequestTable from "../components/RequestTable";
 import AddIcon from '@mui/icons-material/Add';
+import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
   const { requests } = useRequests();
+  const { user, isEditor } = useAuth();
 
   return (
     <Box
@@ -35,29 +37,33 @@ export default function Dashboard() {
       >
         <Box>
           <Typography variant="h4" fontWeight={700} color="#1e293b">
-            Data Request Portal
+            {user ? `Welcome, ${user.name}` : "Data Request Portal"}
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Request and manage data submissions with ease.
+            {user
+              ? `You are logged in as ${user.role}. Manage your data submissions here.`
+              : "Request and manage data submissions with ease."}
           </Typography>
-          {/* New Request Button - Moved here to match reference image */}
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            component={Link}
-            to="/request/new"
-            sx={{
-              mt: 2,
-              bgcolor: "#003366", // Dark blue
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 3,
-              py: 1,
-              borderRadius: 1
-            }}
-          >
-            New Request
-          </Button>
+
+          {isEditor && (
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              component={Link}
+              to="/request/new"
+              sx={{
+                mt: 2,
+                bgcolor: "#003366", // Dark blue
+                textTransform: 'none',
+                fontWeight: 600,
+                px: 3,
+                py: 1,
+                borderRadius: 1
+              }}
+            >
+              New Request
+            </Button>
+          )}
         </Box>
       </Stack>
 

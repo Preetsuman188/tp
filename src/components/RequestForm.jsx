@@ -34,6 +34,7 @@ const DEFAULT_EMAIL_BODY = [
 ].join("\n");
 
 const reminderOptions = [
+  { value: "hourly", label: "Every Hour" },
   { value: "daily", label: "Daily" },
   { value: "alternate", label: "Alternate days" },
   { value: "weekly", label: "Weekly" },
@@ -61,6 +62,7 @@ export default function RequestForm() {
   const [emailBody, setEmailBody] = useState(DEFAULT_EMAIL_BODY);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialRows, setInitialRows] = useState([]);
+  const [templateFile, setTemplateFile] = useState(null);
 
   const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -69,14 +71,41 @@ export default function RequestForm() {
 
   const addChip = (value, setter) => {
     if (!value.trim()) return;
-    const trimmed = value.trim();
-    if (setter === setEmails && !isValidEmail(trimmed)) return;
-    setter((prev) => [...new Set([...prev, trimmed])]);
+
+    // Split by comma or semicolon to support multiple inputs at once
+    const values = value.split(/[;,]+/).map(v => v.trim()).filter(v => v !== "");
+
+    if (setter === setEmails) {
+      const validEmails = values.filter(v => isValidEmail(v));
+      if (validEmails.length > 0) {
+        setter((prev) => [...new Set([...prev, ...validEmails])]);
+      }
+    } else {
+      setter((prev) => [...new Set([...prev, ...values])]);
+    }
   };
 
   const removeChip = (value, setter) => {
     setter((prev) => prev.filter((item) => item !== value));
   };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTemplateFile({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        content: reader.result, // Base64 string
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeFile = () => setTemplateFile(null);
 
   const hydrateTemplate = (template, linkValue) =>
     (template || "")
@@ -109,6 +138,7 @@ export default function RequestForm() {
         templateContent,
         emailSubject,
         emailBody,
+        templateFile,
       });
 
       const link = `${APP_BASE_URL.replace(/\/$/, "")}/request/${id}`;
@@ -147,9 +177,9 @@ export default function RequestForm() {
     <form onSubmit={handleSubmit}>
       <Stack spacing={4}>
 
-        {/* Row 1: Key Inputs */}
+        {/* Basic Info: Title & Deadline */}
         <Grid container spacing={2}>
-          <Grid item xs={12} md={3}>
+          <Grid item xs={12} md={8}>
             <TextField
               required
               fullWidth
@@ -160,9 +190,10 @@ export default function RequestForm() {
                 if (!hasEditedSubject) setEmailSubject(e.target.value);
               }}
               size="small"
+              placeholder="e.g. Monthly Performance Data"
             />
           </Grid>
-          <Grid item xs={12} md={2}>
+          <Grid item xs={12} md={4}>
             <TextField
               type="date"
               label="Deadline"
@@ -173,11 +204,17 @@ export default function RequestForm() {
               size="small"
             />
           </Grid>
-          <Grid item xs={12} md={3}>
+        </Grid>
+
+        {/* Divisions / Departments Section */}
+        <Box>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>
+            Division / Department
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ maxWidth: 600 }}>
             <TextField
               fullWidth
-              label="Division / department"
-              placeholder="Press Enter to add"
+              placeholder="Type department and press Enter"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -187,43 +224,95 @@ export default function RequestForm() {
               }}
               size="small"
             />
-            {departments.length > 0 && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" mt={1}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={(e) => {
+                const input = e.currentTarget.parentElement.querySelector('input');
+                addChip(input.value, setDepartments);
+                input.value = "";
+              }}
+              sx={{ textTransform: 'none', px: 3, bgcolor: '#0f4c81', height: 40 }}
+            >
+              Add
+            </Button>
+          </Stack>
+          {departments.length > 0 && (
+            <Box sx={{ mt: 1.5, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Grid container spacing={1}>
                 {departments.map((dept) => (
-                  <Chip key={dept} label={dept} onDelete={() => removeChip(dept, setDepartments)} size="small" variant="outlined" />
+                  <Grid item key={dept}>
+                    <Chip
+                      label={dept}
+                      onDelete={() => removeChip(dept, setDepartments)}
+                      size="small"
+                      variant="filled"
+                      sx={{ bgcolor: '#e2e8f0', fontWeight: 500 }}
+                    />
+                  </Grid>
                 ))}
-              </Stack>
-            )}
-          </Grid>
-          <Grid item xs={12} md={4}>
+              </Grid>
+            </Box>
+          )}
+        </Box>
+
+        {/* Recipient Emails Section */}
+        <Box>
+          <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>
+            Recipient Emails
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ maxWidth: 600 }}>
             <TextField
               fullWidth
-              label="Recipient emails"
-              placeholder="Press Enter to add"
+              placeholder="Type email and press Enter (Separate with commas for bulk)"
               value={emailInput}
               onChange={(e) => setEmailInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   e.stopPropagation();
-                  const value = emailInput.trim();
-                  if (value && isValidEmail(value)) {
-                    addChip(value, setEmails);
-                    setEmailInput("");
-                  }
+                  addChip(emailInput, setEmails);
+                  setEmailInput("");
                 }
               }}
               size="small"
             />
-            {emails.length > 0 && (
-              <Stack direction="row" spacing={1} flexWrap="wrap" mt={1}>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => {
+                addChip(emailInput, setEmails);
+                setEmailInput("");
+              }}
+              sx={{ textTransform: 'none', px: 3, bgcolor: '#0f4c81', height: 40 }}
+            >
+              Add
+            </Button>
+          </Stack>
+          {emails.length > 0 && (
+            <Box sx={{ mt: 1.5, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
+              <Grid container spacing={1}>
                 {emails.map((mail) => (
-                  <Chip key={mail} label={mail} onDelete={() => removeChip(mail, setEmails)} size="small" variant="outlined" />
+                  <Grid item key={mail} xs={12} sm={6} md={4} lg={3}>
+                    <Chip
+                      label={mail}
+                      onDelete={() => removeChip(mail, setEmails)}
+                      size="small"
+                      variant="filled"
+                      sx={{
+                        width: '100%',
+                        justifyContent: 'space-between',
+                        bgcolor: '#f1f5f9',
+                        border: '1px solid #cbd5e1',
+                        '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }
+                      }}
+                    />
+                  </Grid>
                 ))}
-              </Stack>
-            )}
-          </Grid>
-        </Grid>
+              </Grid>
+            </Box>
+          )}
+        </Box>
 
         {/* Row 2: Controls */}
         <Stack direction="row" flexWrap="wrap" gap={3} alignItems="center">
@@ -280,39 +369,82 @@ export default function RequestForm() {
         />
 
         {/* Row 4: Split Section */}
-        <Grid container spacing={4}>
-          {/* Left: Format Specific or Extras */}
-          <Grid item xs={12} md={6}>
-            <Typography variant="subtitle2" fontWeight={700} gutterBottom>{format} template</Typography>
-            {format !== "Excel" ? (
+        {format !== "Excel" ? (
+          <Grid container spacing={4}>
+            {/* Left: Format Specific or Extras */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+                {format} Document Content
+              </Typography>
+
+              {format === "Word" ? (
+                <Box sx={{ position: 'relative' }}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={10}
+                    value={templateContent}
+                    onChange={(e) => setTemplateContent(e.target.value)}
+                    placeholder="Enter the text content for the Word document template..."
+                    sx={{
+                      bgcolor: '#fff',
+                      '& .MuiInputBase-root': {
+                        fontFamily: '"Times New Roman", Times, serif',
+                        fontSize: '1.1rem',
+                        lineHeight: 1.5,
+                        padding: '24px'
+                      }
+                    }}
+                  />
+                  <Box sx={{ position: 'absolute', top: 0, right: 0, bgcolor: '#2b579a', color: 'white', px: 1, borderRadius: '0 4px 0 4px', fontSize: '10px', fontWeight: 'bold' }}>WORD MODE</Box>
+                </Box>
+              ) : (
+                <Box sx={{ position: 'relative' }}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={10}
+                    value={templateContent}
+                    onChange={(e) => setTemplateContent(e.target.value)}
+                    placeholder="Define the PDF layout content..."
+                    sx={{
+                      bgcolor: '#fff',
+                      '& .MuiInputBase-root': {
+                        fontFamily: 'monospace',
+                        fontSize: '0.9rem',
+                        padding: '24px',
+                        border: '2px solid #ed1c24'
+                      }
+                    }}
+                  />
+                  <Box sx={{ position: 'absolute', top: 0, right: 0, bgcolor: '#ed1c24', color: 'white', px: 1, borderRadius: '0 4px 0 4px', fontSize: '10px', fontWeight: 'bold' }}>PDF MODE</Box>
+                </Box>
+              )}
+            </Grid>
+
+            {/* Right: Email Template */}
+            <Grid item xs={12} md={6}>
+              <Typography variant="caption" color="text.secondary" mb={1} display="block">Email template</Typography>
               <TextField
                 fullWidth
                 multiline
-                minRows={8}
-                value={templateContent}
-                onChange={(e) => setTemplateContent(e.target.value)}
-                placeholder={`Define the structure for the ${format} file...`}
+                minRows={10}
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                sx={{ bgcolor: '#fff' }}
               />
-            ) : (
-              <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px dashed #cbd5e1', height: '100%' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Configure the Excel columns in the table section below.
-                </Typography>
-                <Divider sx={{ my: 2 }} />
-                <Typography variant="caption" color="text.secondary">
-                  Additional {format} settings can be placed here.
-                </Typography>
-              </Box>
-            )}
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                Placeholders: &#123;&#123;title&#125;&#125;, &#123;&#123;deadline&#125;&#125;, &#123;&#123;link&#125;&#125;
+              </Typography>
+            </Grid>
           </Grid>
-
-          {/* Right: Email Template */}
-          <Grid item xs={12} md={6}>
+        ) : (
+          <Box>
             <Typography variant="caption" color="text.secondary" mb={1} display="block">Email template</Typography>
             <TextField
               fullWidth
               multiline
-              minRows={8}
+              minRows={6}
               value={emailBody}
               onChange={(e) => setEmailBody(e.target.value)}
               sx={{ bgcolor: '#fff' }}
@@ -320,42 +452,58 @@ export default function RequestForm() {
             <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
               Placeholders: &#123;&#123;title&#125;&#125;, &#123;&#123;deadline&#125;&#125;, &#123;&#123;link&#125;&#125;
             </Typography>
-          </Grid>
-        </Grid>
+          </Box>
+        )}
 
         {/* Row 5: Dynamic Table (Excel Only) */}
         {format === "Excel" && (
-          <Box>
-            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-              Excel template <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>Define columns to auto-build the sheet.</Typography>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="h5" fontWeight={700} color="#1e293b" gutterBottom>
+              Excel Template
             </Typography>
-            <Box sx={{ border: '1px solid #e2e8f0', borderRadius: 2, p: 2, overflow: 'hidden' }}>
-              <DynamicTable
-                columns={columns}
-                onColumnsChange={setColumns}
-                data={initialRows}
-                onDataChange={setInitialRows}
-                height={300}
-                editable={true}
-                allowColumnManagement={true}
-                minRows={5}
-              />
-            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Define columns to auto-build the sheet.
+            </Typography>
+            <DynamicTable
+              columns={columns}
+              onColumnsChange={setColumns}
+              data={initialRows}
+              onDataChange={setInitialRows}
+              height={400}
+              editable={true}
+              allowColumnManagement={true}
+              minRows={7}
+            />
           </Box>
         )}
 
         {/* Row 6: Upload */}
         <Box>
           <Typography variant="subtitle2" fontWeight={700}>Upload template <Typography component="span" variant="body2" color="text.secondary" fontWeight={400}>(Optional)</Typography></Typography>
-          <Button
-            component="label"
-            variant="outlined"
-            startIcon={<UploadFileIcon />}
-            sx={{ mt: 1, textTransform: 'none' }}
-          >
-            UPLOAD TEMPLATE
-            <input type="file" hidden />
-          </Button>
+          {!templateFile ? (
+            <Button
+              component="label"
+              variant="outlined"
+              startIcon={<UploadFileIcon />}
+              sx={{ mt: 1, textTransform: 'none' }}
+            >
+              UPLOAD TEMPLATE
+              <input type="file" hidden onChange={handleFileChange} />
+            </Button>
+          ) : (
+            <Stack direction="row" spacing={1} alignItems="center" mt={1}>
+              <Chip
+                icon={<UploadFileIcon />}
+                label={templateFile.name}
+                onDelete={removeFile}
+                color="primary"
+                variant="outlined"
+              />
+              <Typography variant="caption" color="text.secondary">
+                ({(templateFile.size / 1024).toFixed(1)} KB)
+              </Typography>
+            </Stack>
+          )}
         </Box>
 
         {/* Footer Actions */}

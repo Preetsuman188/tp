@@ -2,6 +2,7 @@ import pg from 'pg';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import bcrypt from 'bcryptjs';
 
 const { Pool } = pg;
 
@@ -21,7 +22,19 @@ export async function initDatabase() {
   try {
     const client = await pool.connect();
     try {
-      // Create table if not exists
+      // Create users table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id SERIAL PRIMARY KEY,
+          username TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'viewer',
+          name TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Create requests table if not exists
       await client.query(`
         CREATE TABLE IF NOT EXISTS requests (
           id TEXT PRIMARY KEY,
@@ -29,7 +42,18 @@ export async function initDatabase() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
-      console.log('✅ Database table initialized');
+      console.log('✅ Database tables initialized');
+
+      // Create initial admin if no users exist
+      const userCount = await client.query('SELECT COUNT(*) FROM users');
+      if (parseInt(userCount.rows[0].count) === 0) {
+        const hashedPassword = await bcrypt.hash('adminpreet', 10);
+        await client.query(
+          'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4)',
+          ['preetsuman188@gmail.com', hashedPassword, 'admin', 'Preet suman']
+        );
+        console.log('👤 Default admin account created: preetsuman188@gmail.com');
+      }
 
       // Check if data needs migration
       const res = await client.query('SELECT COUNT(*) FROM requests');
@@ -40,7 +64,6 @@ export async function initDatabase() {
           const jsonData = JSON.parse(data);
           if (jsonData.requests && jsonData.requests.length > 0) {
             for (const req of jsonData.requests) {
-              // Check if ID exists (it should, as we checked count=0, but strictly speaking)
               await client.query(
                 'INSERT INTO requests (id, data, created_at) VALUES ($1, $2, $3)',
                 [req.id, req, req.createdAt || new Date()]
@@ -62,6 +85,32 @@ export async function initDatabase() {
 }
 
 export const dbOperations = {
+  // User Operations
+  async createUser(user) {
+    const { username, password, role, name } = user;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      'INSERT INTO users (username, password, role, name) VALUES ($1, $2, $3, $4) RETURNING id, username, role, name, created_at',
+      [username, hashedPassword, role, name]
+    );
+    return rows[0];
+  },
+
+  async getUserByUsername(username) {
+    const { rows } = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    return rows[0];
+  },
+
+  async getAllUsers() {
+    const { rows } = await pool.query('SELECT id, username, role, name, created_at FROM users ORDER BY created_at DESC');
+    return rows;
+  },
+
+  async updateUserRole(id, role) {
+    const { rows } = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING id, username, role', [role, id]);
+    return rows[0];
+  },
+
   // Get all requests
   async getAllRequests() {
     const { rows } = await pool.query('SELECT data FROM requests ORDER BY created_at DESC');
@@ -75,12 +124,13 @@ export const dbOperations = {
   },
 
   // Create new request
-  async createRequest(request) {
+  async createRequest(request, userId) {
     const newRequest = {
       ...request,
       submissions: request.submissions || [],
       status: request.status || 'In Progress',
       createdAt: new Date().toISOString(),
+      createdBy: userId, // Track creator
     };
 
     await pool.query(
@@ -172,5 +222,11 @@ export const dbOperations = {
     } finally {
       client.release();
     }
+  },
+
+  // Delete request
+  async deleteRequest(id) {
+    await pool.query('DELETE FROM requests WHERE id = $1', [id]);
+    return { success: true };
   }
 };

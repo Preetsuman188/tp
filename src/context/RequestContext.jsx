@@ -90,12 +90,23 @@ export function RequestProvider({ children }) {
     }
   };
 
+  const deleteRequest = async (requestId) => {
+    try {
+      await api.deleteRequest(requestId);
+      setRequests((prev) => prev.filter((req) => req.id !== requestId));
+    } catch (err) {
+      console.error('Failed to delete request:', err);
+      throw err;
+    }
+  };
+
   const value = {
     requests,
     addRequest,
     addSubmission,
     markCompleted,
     updateRequest,
+    deleteRequest,
     loading,
     error,
   };

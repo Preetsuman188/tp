@@ -1,66 +1,124 @@
-// Base URL for the backend API.
-// In development, this will default to localhost.
-// In production, set VITE_API_BASE_URL in your hosting provider (e.g. Render/Vercel)
-// to something like: https://your-backend.onrender.com/api
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+  import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:3001/api';
+
+const handleResponse = async (response) => {
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || `Error ${response.status}`);
+    }
+    return data;
+  } else {
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Server Error (${response.status}): ${text.substring(0, 100)}`);
+    }
+    return text;
+  }
+};
+
+const getHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
 
 export const api = {
-  // Get all requests
+  // Auth
+  async login(username, password) {
+    const response = await fetch(`${API_BASE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    return handleResponse(response);
+  },
+
+  // Users
+  async getUsers() {
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  async createUser(userData) {
+    const response = await fetch(`${API_BASE_URL}/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(userData),
+    });
+    return handleResponse(response);
+  },
+
+  async updateUserRole(id, role) {
+    const response = await fetch(`${API_BASE_URL}/users/${id}/role`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify({ role }),
+    });
+    return handleResponse(response);
+  },
+
+  // Requests
   async getAllRequests() {
-    const response = await fetch(`${API_BASE_URL}/requests`);
-    if (!response.ok) throw new Error('Failed to fetch requests');
-    return response.json();
+    const response = await fetch(`${API_BASE_URL}/requests`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
   },
 
-  // Get single request by ID
   async getRequestById(id) {
-    const response = await fetch(`${API_BASE_URL}/requests/${id}`);
-    if (!response.ok) throw new Error('Failed to fetch request');
-    return response.json();
+    const response = await fetch(`${API_BASE_URL}/requests/${id}`, {
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
   },
 
-  // Create new request
   async createRequest(request) {
     const response = await fetch(`${API_BASE_URL}/requests`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(request),
     });
-    if (!response.ok) throw new Error('Failed to create request');
-    return response.json();
+    return handleResponse(response);
   },
 
-  // Add submission to a request
   async addSubmission(requestId, submission) {
     const response = await fetch(`${API_BASE_URL}/requests/${requestId}/submissions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(submission),
     });
-    if (!response.ok) throw new Error('Failed to add submission');
-    return response.json();
+    return handleResponse(response);
   },
 
-  // Update request status
   async updateRequestStatus(id, status) {
     const response = await fetch(`${API_BASE_URL}/requests/${id}/status`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify({ status }),
     });
-    if (!response.ok) throw new Error('Failed to update status');
-    return response.json();
+    return handleResponse(response);
   },
 
-  // Update full request
   async updateRequest(id, updates) {
     const response = await fetch(`${API_BASE_URL}/requests/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getHeaders(),
       body: JSON.stringify(updates),
     });
-    if (!response.ok) throw new Error('Failed to update request');
-    return response.json();
+    return handleResponse(response);
+  },
+
+  async deleteRequest(id) {
+    const response = await fetch(`${API_BASE_URL}/requests/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    return handleResponse(response);
   },
 };
