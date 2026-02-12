@@ -1,4 +1,9 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+// Base URL for the backend API.
+// In development, this will default to localhost.
+// In production, set VITE_API_BASE_URL in your hosting provider (e.g. Render/Vercel)
+// to something like: https://your-backend.onrender.com/api
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 export const api = {
   // Get all requests

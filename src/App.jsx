@@ -3,6 +3,10 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import CreateRequest from "./pages/CreateRequest";
 import RequestDetail from "./pages/RequestDetail";
+import Users from "./pages/Users";
+import Requests from "./pages/Requests";
+import Reminders from "./pages/Reminders";
+import Placeholder from "./pages/Placeholder";
 import Navbar from "./components/Navbar";
 import { RequestProvider } from "./context/RequestContext";
 
@@ -27,6 +31,9 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/request/new" element={<CreateRequest />} />
             <Route path="/request/:id" element={<RequestDetail />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/requests" element={<Requests />} />
+            <Route path="/reminders" element={<Reminders />} />
           </Routes>
         </BrowserRouter>
       </RequestProvider>

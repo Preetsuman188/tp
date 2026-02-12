@@ -1,153 +1,111 @@
 import {
   Box,
-  Card,
-  CardContent,
-  Chip,
-  Divider,
+  Button,
   Stack,
   Typography,
-  Button,
-  List,
-  ListItem,
-  ListItemText,
-  LinearProgress,
+  Grid,
+  Card,
+  CardContent,
+  Divider
 } from "@mui/material";
-import Grid from "@mui/material/Grid";
 import { Link } from "react-router-dom";
 import { useRequests } from "../context/RequestContext";
+import RequestTable from "../components/RequestTable";
+import AddIcon from '@mui/icons-material/Add';
 
 export default function Dashboard() {
   const { requests } = useRequests();
 
-  const pending = requests.filter((r) => r.status !== "Completed").length;
-  const completed = requests.filter((r) => r.status === "Completed").length;
-  const withReminders = requests.filter((r) => r.reminders?.enabled).length;
-
   return (
     <Box
       sx={{
-        maxWidth: 1200,
+        maxWidth: 1400,
         mx: "auto",
-        px: { xs: 2, sm: 4, md: 6 },
-        py: { xs: 5, md: 7 },
+        px: { xs: 2, sm: 3 },
+        py: { xs: 3, md: 4 },
+        bgcolor: "#f8f9fa", // Light grey background
+        minHeight: "100vh"
       }}
     >
       <Stack
         direction={{ xs: "column", md: "row" }}
-        spacing={{ xs: 2.5, md: 3 }}
+        justifyContent="space-between"
         alignItems={{ xs: "flex-start", md: "center" }}
-        sx={{ mb: { xs: 3.5, md: 4.5 } }}
+        sx={{ mb: 4 }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={700}>
-            Data request workspace
+          <Typography variant="h4" fontWeight={700} color="#1e293b">
+            Data Request Portal
           </Typography>
-          <Typography color="text.secondary">
-            Create, assign, remind, and track every division’s submissions in one place.
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            Request and manage data submissions with ease.
           </Typography>
+          {/* New Request Button - Moved here to match reference image */}
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            component={Link}
+            to="/request/new"
+            sx={{
+              mt: 2,
+              bgcolor: "#003366", // Dark blue
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 3,
+              py: 1,
+              borderRadius: 1
+            }}
+          >
+            New Request
+          </Button>
         </Box>
-        <Box sx={{ flex: 1 }} />
       </Stack>
 
-      <Grid
-        container
-        spacing={{ xs: 2.5, md: 3 }}
-        sx={{ mb: { xs: 3.5, md: 4.5 } }}
-      >
-        {[
-          { label: "Open requests", value: pending, color: "primary" },
-          { label: "Completed", value: completed, color: "secondary" },
-          { label: "Auto-reminders active", value: withReminders, color: "info" },
-        ].map((item) => (
-          <Grid key={item.label} item xs={12} md={4}>
-            <Card className="shadow-sm" sx={{ borderRadius: 3 }}>
-              <CardContent sx={{ px: 3, py: 2.75 }}>
-                <Typography color="text.secondary">{item.label}</Typography>
-                <Typography variant="h4" fontWeight={700}>
-                  {item.value}
-                </Typography>
+      {/* Main Grid: Left (Table) and Right (Side Panel) */}
+      <Grid container spacing={3}>
+        {/* Left Column: Requests Table */}
+        <Grid item xs={12} lg={8}>
+          <RequestTable requests={requests} />
+        </Grid>
+
+        {/* Right Column: Side Panel */}
+        <Grid item xs={12} lg={4}>
+          <Stack spacing={3}>
+            {/* Live Data Overview Card */}
+            <Card sx={{ borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+              <CardContent>
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+                  <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 700, color: '#334155' }}>
+                    Live Data Overview
+                  </Typography>
+                </Stack>
+                <Divider sx={{ mb: 2, borderColor: '#e2e8f0' }} />
+
+                {/* Table Header */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, bgcolor: '#64748b', color: 'white', p: 1, borderRadius: '4px 4px 0 0' }}>
+                  <Typography variant="caption" fontWeight={600}>Name</Typography>
+                  <Typography variant="caption" fontWeight={600} align="center">No. of Instruments</Typography>
+                  <Typography variant="caption" fontWeight={600}>Status</Typography>
+                </Box>
+                {/* Table Rows */}
+                <Box sx={{ border: '1px solid #e2e8f0', borderTop: 0 }}>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, p: 1, borderBottom: '1px solid #f1f5f9' }}>
+                    <Typography variant="caption" fontWeight={500}>Plant A</Typography>
+                    <Typography variant="caption" align="center">15</Typography>
+                    <Typography variant="caption" color="success.main" fontWeight={500}>Operational</Typography>
+                  </Box>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1, p: 1 }}>
+                    <Typography variant="caption" fontWeight={500}>Plant B</Typography>
+                    <Typography variant="caption" align="center">10</Typography>
+                    <Typography variant="caption" color="warning.main" fontWeight={500}>Under Maintenance</Typography>
+                  </Box>
+                </Box>
+
               </CardContent>
             </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Card
-        className="shadow-sm"
-        sx={{ borderRadius: 3 }}
-      >
-        <CardContent sx={{ px: { xs: 3, sm: 4 }, py: { xs: 3, sm: 3.5 } }}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            alignItems={{ xs: "flex-start", md: "center" }}
-            spacing={2}
-            justifyContent="space-between"
-          >
-            <Box>
-              <Typography variant="h6">Live requests</Typography>
-              <Typography color="text.secondary">
-                Track deadlines, reminders, and completion in real time.
-              </Typography>
-            </Box>
-            <Button component={Link} to="/request/new" variant="outlined">
-              Create request
-            </Button>
           </Stack>
-
-          <Divider sx={{ my: 2 }} />
-
-          <List disablePadding>
-            {requests.map((req) => {
-              const total = req.departments.length;
-              const done = req.submissions.filter((s) => s.completed).length;
-              const progress = total === 0 ? 0 : Math.round((done / total) * 100);
-              return (
-                <ListItem
-                  key={req.id}
-                  alignItems="flex-start"
-                  sx={{ mb: 1.5, pb: 1.5, borderBottom: "1px solid #e5e7eb" }}
-                  secondaryAction={
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Chip
-                        label={req.status}
-                        color={req.status === "Completed" ? "success" : "warning"}
-                        variant="outlined"
-                      />
-                      <Button component={Link} to={`/request/${req.id}`} size="small">
-                        View
-                      </Button>
-                    </Stack>
-                  }
-                >
-                  <ListItemText
-                    primary={
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        <Typography fontWeight={700}>{req.title}</Typography>
-                        <Chip size="small" label={req.format} />
-                      </Stack>
-                    }
-                    secondary={
-                      <Box className="space-y-1">
-                        <Typography color="text.secondary">
-                          Departments: {req.departments.join(", ")}
-                        </Typography>
-                        <Typography color="text.secondary">
-                          Deadline: {req.deadline || "—"}
-                        </Typography>
-                        <LinearProgress
-                          variant="determinate"
-                          value={progress}
-                          sx={{ height: 6, borderRadius: 999 }}
-                        />
-                      </Box>
-                    }
-                  />
-                </ListItem>
-              );
-            })}
-          </List>
-        </CardContent>
-      </Card>
+        </Grid>
+      </Grid>
     </Box>
   );
 }

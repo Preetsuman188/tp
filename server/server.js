@@ -1,9 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import { dbOperations } from './database.js';
+import { dbOperations, initDatabase } from './database.js';
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
@@ -98,6 +99,7 @@ app.get('/health', (req, res) => {
 // Start server
 async function startServer() {
     try {
+        await initDatabase(); // Initialize DB connection
         app.listen(PORT, () => {
             console.log(`🚀 Backend server running on http://localhost:${PORT}`);
             console.log(`📊 Database initialized successfully`);

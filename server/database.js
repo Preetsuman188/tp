@@ -1,139 +1,176 @@
+import pg from 'pg';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+
+const { Pool } = pg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const DB_FILE = join(__dirname, 'database.json');
 
-// Initialize database file
-async function initDatabase() {
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
+
+// Initialize database
+export async function initDatabase() {
   try {
-    await fs.access(DB_FILE);
-  } catch {
-    // File doesn't exist, create with sample data
-    const initialData = {
-      requests: [
-        {
-          id: 'REQ-001',
-          title: 'Meter inventory - South Zone',
-          format: 'Excel',
-          departments: ['Distribution', 'Maintenance'],
-          emails: ['dist@tatapower.com', 'maint@tatapower.com'],
-          deadline: '2025-01-15',
-          emailSubject: 'Data request: Meter inventory - South Zone',
-          emailBody: 'Hi team,\\n\\nPlease update the sheet for Meter inventory - South Zone.\\nDeadline: 2025-01-15\\nLink: {{link}}\\n\\nThanks,\\nData Office',
-          reminders: { enabled: true, frequency: 'weekly' },
-          instructions: 'Share all active meters with health status.',
-          columns: ['Asset ID', 'Location', 'Status', 'Remarks'],
-          submissions: [
-            {
-              department: 'Distribution',
-              rows: [
-                { 'Asset ID': 'MTR-001', Location: 'Mumbai', Status: 'Active', Remarks: '' },
-                { 'Asset ID': 'MTR-002', Location: 'Pune', Status: 'Inactive', Remarks: 'Under repair' },
-              ],
-              completed: true,
-            },
-            {
-              department: 'Maintenance',
-              rows: [{ 'Asset ID': 'MTR-003', Location: 'Navi Mumbai', Status: 'Active', Remarks: '' }],
-              completed: false,
-            },
-          ],
-          status: 'In Progress',
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    };
-    await fs.writeFile(DB_FILE, JSON.stringify(initialData, null, 2));
-    console.log('✅ Database initialized with sample data');
+    const client = await pool.connect();
+    try {
+      // Create table if not exists
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS requests (
+          id TEXT PRIMARY KEY,
+          data JSONB NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      console.log('✅ Database table initialized');
+
+      // Check if data needs migration
+      const res = await client.query('SELECT COUNT(*) FROM requests');
+      if (parseInt(res.rows[0].count) === 0) {
+        console.log('Migrating data from JSON file...');
+        try {
+          const data = await fs.readFile(DB_FILE, 'utf-8');
+          const jsonData = JSON.parse(data);
+          if (jsonData.requests && jsonData.requests.length > 0) {
+            for (const req of jsonData.requests) {
+              // Check if ID exists (it should, as we checked count=0, but strictly speaking)
+              await client.query(
+                'INSERT INTO requests (id, data, created_at) VALUES ($1, $2, $3)',
+                [req.id, req, req.createdAt || new Date()]
+              );
+            }
+            console.log(`✅ Migrated ${jsonData.requests.length} requests from JSON file`);
+          }
+        } catch (err) {
+          console.log('No local database.json found or error reading it, skipping migration.', err.message);
+        }
+      }
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Failed to initialize database:', err);
+    throw err;
   }
 }
 
-// Read database
-async function readDB() {
-  const data = await fs.readFile(DB_FILE, 'utf-8');
-  return JSON.parse(data);
-}
-
-// Write database
-async function writeDB(data) {
-  await fs.writeFile(DB_FILE, JSON.stringify(data, null, 2));
-}
-
-// Database operations
 export const dbOperations = {
   // Get all requests
   async getAllRequests() {
-    const db = await readDB();
-    return db.requests;
+    const { rows } = await pool.query('SELECT data FROM requests ORDER BY created_at DESC');
+    return rows.map(row => row.data);
   },
 
   // Get single request by ID
   async getRequestById(id) {
-    const db = await readDB();
-    return db.requests.find(r => r.id === id) || null;
+    const { rows } = await pool.query('SELECT data FROM requests WHERE id = $1', [id]);
+    return rows[0] ? rows[0].data : null;
   },
 
   // Create new request
   async createRequest(request) {
-    const db = await readDB();
     const newRequest = {
       ...request,
       submissions: request.submissions || [],
       status: request.status || 'In Progress',
       createdAt: new Date().toISOString(),
     };
-    db.requests.push(newRequest);
-    await writeDB(db);
+
+    await pool.query(
+      'INSERT INTO requests (id, data, created_at) VALUES ($1, $2, $3)',
+      [newRequest.id, newRequest, newRequest.createdAt]
+    );
     return newRequest;
   },
 
   // Add submission to a request
   async addSubmission(requestId, submission) {
-    const db = await readDB();
-    const request = db.requests.find(r => r.id === requestId);
-    if (!request) return null;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT data FROM requests WHERE id = $1 FOR UPDATE', [requestId]);
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
 
-    request.submissions.push({
-      ...submission,
-      createdAt: new Date().toISOString(),
-    });
-    await writeDB(db);
-    return request;
+      const request = rows[0].data;
+      if (!request.submissions) request.submissions = [];
+
+      request.submissions.push({
+        ...submission,
+        createdAt: new Date().toISOString()
+      });
+
+      await client.query('UPDATE requests SET data = $1 WHERE id = $2', [request, requestId]);
+      await client.query('COMMIT');
+      return request;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   },
 
   // Update request status
   async updateRequestStatus(id, status) {
-    const db = await readDB();
-    const request = db.requests.find(r => r.id === id);
-    if (!request) return null;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT data FROM requests WHERE id = $1 FOR UPDATE', [id]);
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
 
-    request.status = status;
-    await writeDB(db);
-    return request;
+      const request = rows[0].data;
+      request.status = status;
+
+      await client.query('UPDATE requests SET data = $1 WHERE id = $2', [request, id]);
+      await client.query('COMMIT');
+      return request;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   },
 
-  // Update full request (e.g. columns)
+  // Update full request
   async updateRequest(id, updates) {
-    const db = await readDB();
-    const requestIndex = db.requests.findIndex(r => r.id === id);
-    if (requestIndex === -1) return null;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query('SELECT data FROM requests WHERE id = $1 FOR UPDATE', [id]);
+      if (rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
 
-    // updates could contain columns, etc.
-    const updatedRequest = {
-      ...db.requests[requestIndex],
-      ...updates,
-      id: id // ensure ID doesn't change
-    };
+      const request = rows[0].data;
+      const updatedRequest = {
+        ...request,
+        ...updates,
+        id: id // Ensure ID doesn't change
+      };
 
-    db.requests[requestIndex] = updatedRequest;
-    await writeDB(db);
-    return updatedRequest;
-  },
+      await client.query('UPDATE requests SET data = $1 WHERE id = $2', [updatedRequest, id]);
+      await client.query('COMMIT');
+      return updatedRequest;
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
 };
-
-// Initialize on module load (fire and forget)
-initDatabase().catch(console.error);
-
