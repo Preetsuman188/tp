@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Button,
@@ -10,6 +10,7 @@ import {
   TextField,
   Typography,
   Divider,
+  Autocomplete,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -17,6 +18,7 @@ import DynamicTable from "./DynamicTable";
 import { Link, useNavigate } from "react-router-dom";
 import { useRequests } from "../context/RequestContext";
 import { sendRequestEmails } from "../services/emailService";
+import { api } from "../services/api";
 
 const APP_BASE_URL = import.meta.env.VITE_APP_BASE_URL || window.location.origin;
 
@@ -47,7 +49,6 @@ export default function RequestForm() {
   const [title, setTitle] = useState("");
   const [departments, setDepartments] = useState([]);
   const [emails, setEmails] = useState([]);
-  const [emailInput, setEmailInput] = useState("");
   const [format, setFormat] = useState("Excel");
   const [deadline, setDeadline] = useState("");
   const [reminderOn, setReminderOn] = useState(true);
@@ -63,6 +64,25 @@ export default function RequestForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialRows, setInitialRows] = useState([]);
   const [templateFile, setTemplateFile] = useState(null);
+  const [availableEmails, setAvailableEmails] = useState([]);
+
+  useEffect(() => {
+    fetchUserEmails();
+  }, []);
+
+  const fetchUserEmails = async () => {
+    try {
+      const data = await api.getUsers();
+      // Store user objects for richer display in Autocomplete
+      const users = data.map(u => ({
+        name: u.name || "N/A",
+        email: u.username
+      })).filter(u => u.email);
+      setAvailableEmails(users);
+    } catch (err) {
+      console.error("Failed to fetch users for suggestions", err);
+    }
+  };
 
   const isValidEmail = (email) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -120,10 +140,7 @@ export default function RequestForm() {
     setIsSubmitting(true);
     let id = "";
     try {
-      const inlineEmail = emailInput.trim() || "";
-      const finalEmails = inlineEmail && isValidEmail(inlineEmail)
-        ? [...new Set([...emails, inlineEmail])]
-        : emails;
+      const finalEmails = emails;
 
       id = await addRequest({
         title,
@@ -261,57 +278,63 @@ export default function RequestForm() {
           <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>
             Recipient Emails
           </Typography>
-          <Stack direction="row" spacing={1} sx={{ maxWidth: 600 }}>
-            <TextField
-              fullWidth
-              placeholder="Type email and press Enter (Separate with commas for bulk)"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  addChip(emailInput, setEmails);
-                  setEmailInput("");
-                }
-              }}
-              size="small"
-            />
-            <Button
-              size="small"
-              variant="contained"
-              onClick={() => {
-                addChip(emailInput, setEmails);
-                setEmailInput("");
-              }}
-              sx={{ textTransform: 'none', px: 3, bgcolor: '#0f4c81', height: 40 }}
-            >
-              Add
-            </Button>
-          </Stack>
-          {emails.length > 0 && (
-            <Box sx={{ mt: 1.5, p: 2, bgcolor: '#f8fafc', borderRadius: 2, border: '1px solid #e2e8f0' }}>
-              <Grid container spacing={1}>
-                {emails.map((mail) => (
-                  <Grid item key={mail} xs={12} sm={6} md={4} lg={3}>
-                    <Chip
-                      label={mail}
-                      onDelete={() => removeChip(mail, setEmails)}
-                      size="small"
-                      variant="filled"
-                      sx={{
-                        width: '100%',
-                        justifyContent: 'space-between',
-                        bgcolor: '#f1f5f9',
-                        border: '1px solid #cbd5e1',
-                        '& .MuiChip-label': { overflow: 'hidden', textOverflow: 'ellipsis' }
-                      }}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          )}
+          <Autocomplete
+            multiple
+            freeSolo
+            options={availableEmails}
+            getOptionLabel={(option) => {
+              if (typeof option === 'string') return option;
+              return option.email;
+            }}
+            value={emails}
+            onChange={(event, newValue) => {
+              // Extract emails from whatever was selected/typed
+              const processed = newValue.map(item => {
+                if (typeof item === 'string') return item;
+                return item.email;
+              });
+              // Filter for valid emails
+              const validOnly = processed.filter(val => isValidEmail(val));
+              setEmails([...new Set(validOnly)]);
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                placeholder={emails.length === 0 ? "Select or type emails..." : ""}
+              />
+            )}
+            renderTags={(value, getTagProps) =>
+              value.map((option, index) => (
+                <Chip
+                  {...getTagProps({ index })}
+                  key={option}
+                  label={option}
+                  size="small"
+                  sx={{
+                    bgcolor: '#f1f5f9',
+                    borderRadius: 1,
+                    border: '1px solid #cbd5e1',
+                    fontWeight: 500
+                  }}
+                />
+              ))
+            }
+            renderOption={(props, option) => (
+              <li {...props} key={option.email}>
+                <Box>
+                  <Typography variant="body2" fontWeight={600}>{option.name}</Typography>
+                  <Typography variant="caption" color="text.secondary">{option.email}</Typography>
+                </Box>
+              </li>
+            )}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                bgcolor: '#fff',
+                borderRadius: 2
+              }
+            }}
+          />
         </Box>
 
         {/* Row 2: Controls */}

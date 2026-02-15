@@ -64,8 +64,8 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// Get all users (Admin only)
-app.get('/api/users', authenticateToken, authorizeRoles('admin'), async (req, res) => {
+// Get all users (Admin/Editor for suggestions)
+app.get('/api/users', authenticateToken, authorizeRoles('admin', 'editor'), async (req, res) => {
     try {
         const users = await dbOperations.getAllUsers();
         res.json(users);
