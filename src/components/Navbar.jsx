@@ -53,7 +53,7 @@ export default function Navbar() {
               T
             </Box>
             <Typography variant="h6" sx={{ fontWeight: 700, color: "white", letterSpacing: 0.5 }}>
-              TATA POWER
+              TPSODL
             </Typography>
           </Box>
         </Stack>

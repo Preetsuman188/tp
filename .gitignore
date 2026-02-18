@@ -27,3 +27,4 @@ server/node_modules/
 server/database.json
 .env
 .env.local
+package-lock.json

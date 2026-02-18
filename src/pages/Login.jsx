@@ -56,7 +56,7 @@ export default function Login() {
             <Container maxWidth="xs">
                 <Box sx={{ mb: 4, textAlign: 'center' }}>
                     <Typography variant="h3" fontWeight={800} color="white" gutterBottom>
-                        Tata Power
+                        TPSODL
                     </Typography>
                     <Typography variant="body1" color="rgba(255,255,255,0.7)">
                         Data Request Management System
