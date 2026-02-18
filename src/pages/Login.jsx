@@ -136,7 +136,7 @@ export default function Login() {
 
                         <Box sx={{ mt: 3, textAlign: 'center' }}>
                             <Typography variant="body2" color="text.secondary">
-                                Default: admin / admin123
+                                {/* Default: admin / admin123 */}
                             </Typography>
                         </Box>
                     </CardContent>
