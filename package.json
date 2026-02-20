@@ -25,6 +25,7 @@
     "@syncfusion/ej2-react-spreadsheet": "^31.2.18",
     "ag-grid-community": "^34.3.1",
     "ag-grid-react": "^34.3.1",
+    "exceljs": "^4.4.0",
     "handsontable": "^16.2.0",
     "hyperformula": "^3.1.0",
     "react": "^19.2.0",
